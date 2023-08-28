@@ -1,0 +1,58 @@
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+
+
+books_data = pd.read_excel("C:\\Users\\Piyush Kumar\\Desktop\\CodSoft.xlsx", sheet_name='Sheet1')
+print(books_data.head())
+
+
+books_data['description'] = books_data['description'].fillna('')
+books_data['description'] = books_data['description'].str.lower()
+
+#TF-IDF vectorizer 
+tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf_vectorizer.fit_transform(books_data['description'])
+
+#To get book recommendations for a given book title
+def get_book_recommendations(book_title, top_n=5):
+    idx = books_data[books_data['title'] == book_title].index[0]
+    cosine_similarities = linear_kernel(tfidf_matrix[idx], tfidf_matrix)
+    similar_books_indices = cosine_similarities.argsort()[0][-top_n-1:-1][::-1]
+    
+    recommendations = []
+    for i in similar_books_indices:
+        recommendations.append(books_data['title'].iloc[i])
+
+    return recommendations
+
+# Example usage:
+book_title = "Gaban"
+recommendations = get_book_recommendations(book_title)
+
+print(f"Top 5 book recommendations for '{book_title}':")
+for idx, book_title in enumerate(recommendations, start=1):
+    print(f"{idx}. {book_title}")
+
+'''
+output-
+         title                  author                  genre  \
+0   Madhushala  Harivansh Rai Bachchan     Poetry, Philosophy   
+1        Godan        Munshi Premchand  Fiction, Social Drama   
+2      Nirmala        Munshi Premchand  Fiction, Social Drama   
+3  Rashmirathi   Ramdhari Singh Dinkar            Epic Poetry   
+4        Gaban        Munshi Premchand  Fiction, Social Drama   
+
+                                         description  
+0  "Madhushala" is a collection of Hindi poems, It revolves around the themes of life, death, and the metaphor of a tavern."
+1  "Godan" is a classic Hindi novel, It portrays the life of a poor farmer, Hori, and his desire to fulfill his dream of owning a cow."
+2  "Nirmala" is a poignant novel that addresses social issues like child marriage and women's rights."
+3  "Rashmirathi" is an epic poem based on the life of Karna, a prominent figure from the Indian epic Mahabharata."
+4  "Gaban" is a powerful novel that exposes the weaknesses and moral conflicts of its central character, Ramanath."
+  
+Top 5 book recommendations for 'Gaban':
+1. Nirmala
+2. Godan
+3. Rashmirathi
+4. Madhushala
+'''
