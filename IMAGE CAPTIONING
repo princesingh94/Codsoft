@@ -1,0 +1,95 @@
+import torch
+import torch.nn as nn
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+from PIL import Image
+import os
+
+# Set device (CPU or GPU)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Data preprocessing and loading
+def load_images_and_captions(image_dir, captions_file, transform):
+    image_paths = []
+    captions = []
+
+    with open(captions_file, "r") as file:
+        for line in file:
+            line = line.strip()
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue  # Skip lines that don't have both image name and caption
+            image_name = parts[0]
+            caption = parts[1]
+            image_path = os.path.join(image_dir, image_name)
+            image_paths.append(image_path)
+            captions.append(caption)
+
+    images = [transform(Image.open(path)) for path in image_paths]
+    
+    # Check if images list is empty
+    if not images:
+        raise RuntimeError("No valid images found in the specified image directory.")
+    
+    images = torch.stack(images)
+    return images, captions
+
+
+
+image_dir = "C:\\Users\\Prince Kumar\\Desktop\\wallpaper"  
+captions_file = "C:\\Users\\Prince Kumar\\Desktop\\CodSoft.txt"
+
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+])
+
+images, captions = load_images_and_captions(image_dir, captions_file, transform)
+dataloader = DataLoader(list(zip(images, captions)), batch_size=64, shuffle=True)
+
+# Define the model
+vocab_size = len(captions)  # Number of unique captions in the dataset
+model = ImageCaptioningModel(embed_size=256, hidden_size=512, vocab_size=vocab_size, num_layers=1).to(device)
+
+# Define the loss function and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# Define the train_model function
+def train_model(model, dataloader, criterion, optimizer, device, num_epochs=10):
+    model.train()
+    for epoch in range(num_epochs):
+        for images, captions in dataloader:
+            images = images.to(device)
+            captions = captions.to(device)
+
+            optimizer.zero_grad()
+            outputs = model(images, captions[:, :-1])
+            loss = criterion(outputs.reshape(-1, outputs.shape[2]), captions[:, 1:].reshape(-1))
+            loss.backward()
+            optimizer.step()
+
+# Train the model
+train_model(model, dataloader, criterion, optimizer, device, num_epochs=10)
+
+# Inference
+def caption_image(image_path, model, transform, vocab):
+    image = Image.open(image_path)
+    image = transform(image).unsqueeze(0).to(device)
+
+    feature = model.extract_feature(image)
+    sampled_ids = model.caption_image(feature, vocab)
+
+    sampled_caption = []
+    for word_id in sampled_ids:
+        word = vocab.idx2word[word_id]
+        sampled_caption.append(word)
+        if word == "<end>":
+            break
+
+    return " ".join(sampled_caption)
+
+# Example usage
+image_path = "C:\\Users\\Prince Kumar\\Desktop\\wallpaper\\life.jpg"
+caption = caption_image(image_path, model, transform, len(captions))
+print(f"Image Caption: {caption}")
